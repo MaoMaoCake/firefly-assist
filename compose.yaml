@@ -1,0 +1,7 @@
+services:
+  firefly-assist:
+    build: .
+    image: firefly-assist:local
+    ports:
+      - "${PORT:-8080}:80"
+    restart: unless-stopped

@@ -2,6 +2,33 @@
 
 Svelte + TypeScript companion PWA targeting Firefly III 6.7.9. No external database or application server. Run `npm install` and `npm run dev`. Validate with `npm run check`, `npm test`, and `npm run build`; deploy `dist/` to an HTTPS static host.
 
+## Docker
+
+With Docker and Docker Compose installed, run from this repository:
+
+```bash
+docker compose up -d --build
+```
+
+Open **http://localhost:8080** and configure your Firefly URL and PAT in Settings. To choose another port, run `PORT=8090 docker compose up -d --build`.
+
+```bash
+docker compose logs -f       # view logs
+docker compose down          # stop and remove the container
+docker compose up -d --build # rebuild after updating the source
+```
+
+The multi-stage image builds and checks the app with Node, then serves only the compiled static files with Nginx. No database, volumes, or PAT environment variables are needed. Settings and pending purchases remain in each browser's IndexedDB; replacing the container does not erase them. Keep the same public origin to retain access to that browser data.
+
+For phone installation and remote use, put this container behind your HTTPS reverse proxy on a dedicated domain, forwarding to port 8080 on the Docker host (or `firefly-assist:80` from a proxy on the same Docker network). Serve at the domain root. TLS is terminated by the proxy; this container serves HTTP. Configure Firefly CORS to permit the companion's HTTPS origin. A plain LAN HTTP URL cannot provide the PWA's secure-context features.
+
+Without Compose:
+
+```bash
+docker build -t firefly-assist:local .
+docker run -d --name firefly-assist --restart unless-stopped -p 8080:80 firefly-assist:local
+```
+
 ## Setup
 
 In Settings enter the Firefly base URL and personal access token. Your Firefly server/reverse proxy must allow the PWA's exact origin, Authorization and Content-Type headers, and GET/POST/PUT/OPTIONS methods through CORS. Never embed the PAT into deployed assets. The PAT is stored in IndexedDB on this device, accessible to scripts on this origin. Use a dedicated trusted origin.
