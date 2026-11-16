@@ -30,6 +30,7 @@
  <div class="workspace" id="workspace">
  <nav aria-label="Main tabs">{#each [['cash','Cash'],['credit','Credit'],['transfers','Transfers'],['settings','Settings']] as [id,label]}<button class:active={tab===id} aria-current={tab===id ? "page" : undefined} disabled={busy||recording} onclick={()=>selectTab(id)}>{label}</button>{/each}</nav>
  <section class="panel" aria-label="Transaction workspace">
+ <div hidden={tab!=='settings'}><InstallApp/><hr/></div>
  {#if tab==='cash' || tab==='credit'}
  <div class="panel-heading"><div><p class="eyebrow">{tab==='cash'?'NEW TRANSACTION':'NEW TRANSACTION'}</p><h2>{tab==='cash'?'Cash purchase':'Credit purchase'}</h2></div><span class="symbol">{tab==='cash'?'↗':'⇄'}</span></div>
  <form onsubmit={(e)=>{e.preventDefault();void record();}}>
