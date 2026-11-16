@@ -1,0 +1,51 @@
+{
+ "start": "2026-11-16T10:16:47.601Z",
+ "round": 0,
+ "idle": 0,
+ "errors": 1,
+ "status": "error",
+ "history": [
+  {
+   "at": "2026-11-16T10:16:56.598Z",
+   "mode": "manual",
+   "status": "error",
+   "fails": 0,
+   "round": 0,
+   "reused": false,
+   "stopHookActive": false
+  }
+ ],
+ "max": 3,
+ "marker": {
+  "page": "dist/index.html",
+  "url": null,
+  "root": "dist",
+  "kind": "software",
+  "category": "Firefly III companion",
+  "primary": "Save purchase",
+  "rounds": 3,
+  "start": "2026-11-16T10:16:47.601Z",
+  "by": "gate.mjs --start"
+ },
+ "manual": true,
+ "fp": "018c0729be81f48a",
+ "page": "dist/index.html",
+ "found": {
+  "fails": [],
+  "warns": [],
+  "crashed": [
+   "the copy (the page showed no <main>, <section> or <h1> to lint)",
+   "consistency.mjs gave no report (exit 1: Error: no free port in 5200-5299)",
+   "check.mjs could not run (exit 2: no Chrome found (set CHROME_PATH))"
+  ],
+  "seconds": {
+   "consistency": 0,
+   "layout": 0
+  }
+ },
+ "open": [],
+ "waived": [],
+ "warnCount": 0,
+ "note": "the copy (the page showed no <main>, <section> or <h1> to lint); consistency.mjs gave no report (exit 1: Error: no free port in 5200-5299); check.mjs could not run (exit 2: no Chrome found (set CHROME_PATH))",
+ "at": "2026-11-16T10:16:56.598Z"
+}

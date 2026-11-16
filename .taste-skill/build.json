@@ -1,0 +1,11 @@
+{
+ "page": "dist/index.html",
+ "url": null,
+ "root": "dist",
+ "kind": "software",
+ "category": "Firefly III companion",
+ "primary": "Save purchase",
+ "rounds": 3,
+ "start": "2026-11-16T10:16:47.601Z",
+ "by": "gate.mjs --start"
+}
