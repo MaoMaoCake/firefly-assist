@@ -31,6 +31,83 @@ docker run -d --name firefly-assist --restart unless-stopped -p 8080:80 firefly-
 
 ## Setup
 
+### Browser in Docker
+
+A dedicated [Selenium Chromium container](https://github.com/SeleniumHQ/docker-selenium)
+provides automation and a live desktop without a host browser extension:
+
+```bash
+docker compose --profile firefly --profile browser up -d browser-localhost
+python3 scripts/connect-browser.py
+```
+
+The connection script uses the existing ignored `.env.firefly-user.json` dummy
+credentials, connects Assist through its UI, selects the dummy cash account and
+checks that the preference survives reload. It does not create purchases.
+The file must contain `token` and `cash` from the local fixture setup.
+
+Open **http://localhost:7900** to view/control Chromium (VNC password: `secret`).
+WebDriver is at `http://localhost:4444`; both ports bind only to host loopback.
+Inside Chromium, Assist is `http://localhost:8080` and Firefly is
+`http://localhost:8081`. A proxy sharing the browser network namespace routes
+those addresses to the Compose services, retaining browser secure-context APIs.
+No host browser profile, credentials directory, or Docker socket is mounted.
+
+Sessions are disposable and expire after one idle hour. To reconnect after a
+restart, rerun the Python script. Before starting a second session, stop and
+start the browser stack (only one session is allowed):
+
+```bash
+docker compose --profile firefly --profile browser stop browser-localhost browser
+docker compose --profile firefly --profile browser up -d browser-localhost
+```
+
+This is a local functional-test browser, not the fully isolated security-audit
+sandbox. Keep it for dummy data; its network can reach external sites.
+
+With a connected Docker browser session, run `python3 scripts/browser-test.py`
+for the local end-to-end suite. It creates/reuses Audit Card and Audit Reserve,
+links them through the UI, and writes four uniquely labeled dummy ledger entries
+per successful run. It checks cash and credit purchases, zero-amount rejection,
+retry duplication, transfer completion, offline queuing, reconnect and reload.
+Entries are retained for inspection. The suite clears service-worker app-shell
+caches in this disposable browser to load the current build, preserving IndexedDB.
+Results are written to `/tmp/firefly-e2e-results.json`.
+
+### Local Firefly test service
+
+The optional `firefly` Compose profile provides Firefly III 6.7.9 (the version
+targeted by this app) and MariaDB 11.4 with separate persistent volumes:
+
+```bash
+python3 scripts/init-firefly.py
+docker compose --profile firefly up -d firefly
+```
+
+Open http://localhost:8081 and register a dummy test user. Generate a personal
+access token in Firefly's profile, then connect Assist to `http://localhost:8081`
+with that token. Use the same single Firefly user in this browser; switching
+users with queued purchases is not supported. Start Assist separately with
+`docker compose up -d --build firefly-assist` and open http://localhost:8080.
+
+The initializer preserves an existing `.env.firefly`; newly generated files are
+owner-readable/writable and ignored by Git. Preserve this file along with the
+volumes across restarts. Firefly binds only to loopback, the database has no host
+port, and the database is isolated on an internal network. Firefly also uses a
+bridge network for its localhost port. This is a
+local fixture for dummy data, not a production deployment or the full audit
+execution sandbox. No cron or email delivery is configured.
+
+Check status with `docker compose --profile firefly ps`; stop the fixture with
+`docker compose --profile firefly stop firefly firefly-db`. Stopping retains data.
+The existing `scripts/live-test.ts` targets a remote demo; do not use it for this
+local fixture. Startup verification returned HTTP 302 from Firefly and HTTP 204
+for a GET API preflight from `http://localhost:8080`, allowing Authorization and
+Content-Type. Authenticated browser flows still need validation after registration.
+
+Configuration follows the [official Firefly Docker example](https://github.com/firefly-iii/docker/blob/main/docker-compose.yml)
+and [6.7.9 environment reference](https://github.com/firefly-iii/firefly-iii/blob/v6.7.9/.env.example).
+
 In Settings enter the Firefly base URL and personal access token. Your Firefly server/reverse proxy must allow the PWA's exact origin, Authorization and Content-Type headers, and GET/POST/PUT/OPTIONS methods through CORS. Never embed the PAT into deployed assets. The PAT is stored in IndexedDB on this device, accessible to scripts on this origin. Use a dedicated trusted origin.
 
 Select one primary cash asset. Purchases omit the destination account; Firefly uses its internal cash account for the blank withdrawal destination. Link existing credit liabilities to separate savings assets. Links live in a versioned `[firefly-assist]` JSON block in liability notes; other notes are preserved. Account preferences are local to each device. Purchases use the current time and a single currency. Negative balances are allowed.

@@ -5,3 +5,87 @@ services:
     ports:
       - "${PORT:-8080}:80"
     restart: unless-stopped
+
+  # Optional local fixture: docker compose --profile firefly up -d
+  firefly:
+    image: fireflyiii/core:version-6.7.9
+    profiles: [firefly]
+    env_file: .env.firefly
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_URL: http://localhost:8081
+      SITE_OWNER: audit@example.test
+      TZ: Asia/Bangkok
+      DB_CONNECTION: mysql
+      DB_HOST: firefly-db
+      DB_PORT: "3306"
+      DB_DATABASE: firefly
+      DB_USERNAME: firefly
+      MAIL_MAILER: log
+      SEND_ERROR_MESSAGE: "false"
+    ports:
+      - "127.0.0.1:8081:8080"
+    volumes:
+      - firefly-upload:/var/www/html/storage/upload
+    networks: [firefly-local, firefly-web]
+    depends_on:
+      firefly-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  firefly-db:
+    image: mariadb:11.4
+    profiles: [firefly]
+    env_file: .env.firefly
+    environment:
+      MARIADB_DATABASE: firefly
+      MARIADB_USER: firefly
+    volumes:
+      - firefly-db:/var/lib/mysql
+    networks: [firefly-local]
+    healthcheck:
+      test: [CMD, healthcheck.sh, --connect, --innodb_initialized]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
+  browser:
+    image: selenium/standalone-chromium:4.52.0-20261101
+    profiles: [browser]
+    shm_size: 2gb
+    mem_limit: 3g
+    cpus: 2
+    pids_limit: 512
+    environment:
+      SE_NODE_MAX_SESSIONS: "1"
+      SE_NODE_SESSION_TIMEOUT: "3600"
+    ports:
+      - "127.0.0.1:4444:4444"
+      - "127.0.0.1:7900:7900"
+    networks: [default, firefly-web]
+
+  browser-localhost:
+    image: nginx:stable-alpine
+    profiles: [browser]
+    network_mode: service:browser
+    volumes:
+      - ./docker/browser-localhost.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      browser:
+        condition: service_started
+      firefly-assist:
+        condition: service_started
+      firefly:
+        condition: service_started
+
+networks:
+  firefly-web:
+  firefly-local:
+    internal: true
+
+volumes:
+  firefly-db:
+  firefly-upload:
