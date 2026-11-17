@@ -1,9 +1,18 @@
 <script lang="ts">
  import { onMount } from 'svelte';
  import InstallApp from './InstallApp.svelte';
- import { get, set, queue, save, api, accounts, create, sync, link, linkedNotes, type Account, type Config, type Operation, untransferred, markTransferred, type ReserveTransfer } from './core';
+ import { getThemeSettings, updateTheme, type ThemeMode, type ThemeAccent } from './theme';
+ import { get, set, queue, save, api, accounts, create, sync, link, linkedNotes, type Account, type Config, type Operation, untransferred, markTransferred, cachedTransfers, saveTransfersCache, removeCachedTransfer, type ReserveTransfer } from './core';
  let tab = 'cash', name = '', amount = '', card = '', linkingCard = '', reserve = '', message = '', busy = false, recording = false;
- let transfers: ReserveTransfer[] = [], transfersLoaded = false;
+ let transfers: ReserveTransfer[] = [], transfersLoaded = false, transfersRefreshing = false, transferCacheTime = 0;
+ let appearance = getThemeSettings();
+ const accents: { id: ThemeAccent; label: string }[] = [
+  { id: 'forest', label: 'Forest' }, { id: 'purple', label: 'Purple' },
+  { id: 'blue', label: 'Blue' }, { id: 'teal', label: 'Teal' },
+  { id: 'orange', label: 'Orange' }, { id: 'rose', label: 'Rose' },
+ ];
+ function chooseMode(mode: ThemeMode) { appearance = { ...appearance, mode }; updateTheme(appearance); }
+ function chooseAccent(accent: ThemeAccent) { appearance = { ...appearance, accent }; updateTheme(appearance); }
  let config: Config = {url:'',token:'',cash:''};
  let all: Account[] = [], operations: Operation[] = [];
  $: assets = all.filter(a=>a.attributes.type==='asset');
@@ -11,8 +20,39 @@
  $: pending = operations.filter(o=>!o.legs.every(l=>l.done));
  function cardLink(a: Account) { try {return link(a.attributes.notes);} catch{return '';} }
  async function run(action: ()=>Promise<void>) {busy=true; message=''; try{await action();}catch(e){message=e instanceof Error ? e.message : String(e);}finally{busy=false;} }
- async function loadTransfers() { await run(async()=>{transfersLoaded=false; transfers=[]; const stored=await get<Config>('config'); if(!stored?.token) throw new Error('Connect to Firefly in Settings first.'); transfers=await untransferred(stored); transfersLoaded=true;}); }
- async function completeTransfer(item: ReserveTransfer) {await run(async()=>{const stored=await get<Config>('config'); if(!stored?.token) throw new Error('Connect to Firefly first.'); await markTransferred(stored,item); transfers=transfers.filter(t=>t.groupId!==item.groupId || t.journalId!==item.journalId); message='Marked as transferred.';});}
+ async function loadTransfers() {
+  if (transfersRefreshing) return;
+  message = '';
+  const stored = await get<Config>('config');
+  if (!stored?.token) { message = 'Connect to Firefly in Settings first.'; return; }
+  // Render an IndexedDB snapshot before network pagination begins.
+  try {
+   const cached = await cachedTransfers(stored);
+   transfers = cached?.items ?? [];
+   transfersLoaded = true;
+   transferCacheTime = cached?.updatedAt ?? 0;
+  } catch (e) { message = `Could not read transfer cache: ${String(e)}`; }
+  if (!navigator.onLine) { message = 'Offline: showing saved transfers. Status may be outdated.'; return; }
+  transfersRefreshing = true;
+  try {
+   const fresh = await untransferred(stored);
+   await saveTransfersCache(stored, fresh);
+   transfers = fresh;
+   transferCacheTime = Date.now();
+   transfersLoaded = true;
+  } catch (e) { message = `Could not refresh transfers; showing last saved list. ${String(e)}`; }
+  finally { transfersRefreshing = false; }
+ }
+ async function completeTransfer(item: ReserveTransfer) {
+  await run(async()=>{
+   const stored=await get<Config>('config');
+   if(!stored?.token) throw new Error('Connect to Firefly first.');
+   await markTransferred(stored,item);
+   transfers=transfers.filter(t=>t.groupId!==item.groupId || t.journalId!==item.journalId);
+   await removeCachedTransfer(stored,item);
+   message='Marked as transferred.';
+  });
+ }
  function selectTab(id: string) {tab=id;message=''; if(id==='transfers') void loadTransfers();}
  async function synchronize() { await run(async()=>{ const stored = await get<Config>('config'); if(!stored?.token) throw new Error('Save your connection in Settings first.'); await sync(stored); operations=await queue(); message=pending.length ? 'Some purchases need attention. See the queue below.' : 'All purchases synced.'; }); }
  onMount(()=>{ void run(async()=>{config=await get<Config>('config') || config; all=await get<Account[]>('accounts') || []; operations=await queue(); if(config.token){await sync(config); operations=await queue();}else tab='settings';}); });
@@ -41,22 +81,37 @@
  <button class="primary" disabled={busy||recording}>Save purchase <span>↗</span></button>
  </form>
  {:else if tab==='transfers'}
- <div class="queue-heading"><h2>To transfer</h2><button disabled={busy} onclick={loadTransfers}>{busy?'Loading…':'Refresh'}</button></div>
+ <div class="queue-heading"><h2>To transfer</h2><button disabled={busy||transfersRefreshing} onclick={loadTransfers}>{transfersRefreshing?'Refreshing…':'Refresh'}</button></div>
  <p class="hint">Move this money from cash to savings in your bank, then mark it transferred here. This updates the existing Firefly record.</p>
+ {#if transferCacheTime}<p class="hint">Saved list: {new Date(transferCacheTime).toLocaleString()}. Refresh to check for updates on other devices.</p>{/if}
  {#if !transfersLoaded}<p class="hint">Connect to load your pending transfers.</p>
  {:else if transfers.length===0}<p>No transfers waiting.</p>{/if}
  {#each transfers as transfer (`${transfer.groupId}:${transfer.journalId}`)}
  <article class="transfer-item"><strong>{transfer.description}</strong><span>{transfer.currency} {transfer.amount}</span>
  <p>{transfer.source} → {transfer.destination}</p><p>{new Date(transfer.date).toLocaleDateString()}</p>
  {#if transfer.legacy}<p class="hint">Older transfer — completion not yet recorded.</p>{/if}
- <button disabled={busy} onclick={()=>completeTransfer(transfer)}>Mark transferred</button></article>
+ <button disabled={busy||transfersRefreshing||!navigator.onLine} onclick={()=>completeTransfer(transfer)}>Mark transferred</button></article>
  {/each}
- <p class="hint">An internet connection is needed to load and mark transfers. Purchases waiting to sync will appear after they sync.</p>
+ <p class="hint">Transfers are saved on this device for quick viewing, including offline. Internet is required to refresh and mark transfers; saved statuses may be outdated. Purchases waiting to sync will appear after they sync.</p>
  {:else}
  <p class="eyebrow">CONNECTION</p><h2>Connect to Firefly III</h2><p class="hint">Connect once, then record purchases wherever you are.</p>
  <label>Firefly III URL<input bind:value={config.url} placeholder="https://firefly.example.com" type="url"/></label>
  <label>Personal access token<input bind:value={config.token} type="password" autocomplete="off"/></label><p class="hint">Stored in this browser. Your Firefly server must allow this app’s origin through CORS.</p>
  <button disabled={busy} onclick={connect}>Connect & refresh accounts</button>
+ <hr/><section class="appearance" aria-label="Appearance settings">
+ <h3>Appearance</h3><p class="hint">Follow the system light/dark mode or choose a palette for this device. Browsers cannot read Android wallpaper colors directly.</p>
+ <div class="appearance-modes" role="group" aria-label="Color mode">
+ {#each [['system','System'],['light','Light'],['dark','Dark']] as [id,label]}
+ <button type="button" class:selected={appearance.mode===id} aria-pressed={appearance.mode===id} onclick={()=>chooseMode(id as ThemeMode)}>{label}</button>
+ {/each}
+ </div>
+ <p class="appearance-label">Accent color</p>
+ <div class="appearance-accents" role="group" aria-label="Accent color">
+ {#each accents as accent}
+ <button type="button" class="accent-choice" class:selected={appearance.accent===accent.id} data-color={accent.id} aria-label={accent.label} aria-pressed={appearance.accent===accent.id} title={accent.label} onclick={()=>chooseAccent(accent.id)}><span aria-hidden="true">{appearance.accent===accent.id?'✓':''}</span></button>
+ {/each}
+ </div>
+ </section>
  <hr/><h3>Primary cash account</h3>
  <label>Primary cash account<select bind:value={config.cash}><option value="">Choose an asset account</option>{#each assets as a}<option value={a.id}>{a.attributes.name}</option>{/each}</select></label>
  <button disabled={busy} onclick={preferences}>Save preferences</button>

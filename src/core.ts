@@ -70,19 +70,46 @@ export function sameTransactionNotes(actual: unknown, expected: unknown) {
  for(const entry of [a,b]) {if(entry.meta.transferred !== undefined && typeof entry.meta.transferred !== 'boolean') return false; delete entry.meta.transferred;}
  return JSON.stringify(a.data) === JSON.stringify(b.data);
 }
+// Cache is scoped to the Firefly URL and a SHA-256 fingerprint of the PAT.
+export async function transferCacheKey(c: Config): Promise<string> {
+ const bytes = new TextEncoder().encode(`${c.url}\0${c.token}`);
+ const digest = await crypto.subtle.digest('SHA-256', bytes);
+ return 'transfers:' + Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
+}
+export type TransferSnapshot = { items: ReserveTransfer[]; updatedAt: number };
+export async function cachedTransfers(c: Config): Promise<TransferSnapshot | undefined> {
+ return get<TransferSnapshot>(await transferCacheKey(c));
+}
+export async function saveTransfersCache(c: Config, items: ReserveTransfer[]): Promise<void> {
+ await set(await transferCacheKey(c), { items, updatedAt: Date.now() } satisfies TransferSnapshot);
+}
+export async function removeCachedTransfer(c: Config, item: ReserveTransfer): Promise<void> {
+ const cached = await cachedTransfers(c);
+ if (!cached) return;
+ await saveTransfersCache(c, cached.items.filter(t => t.groupId !== item.groupId || t.journalId !== item.journalId));
+}
 export async function untransferred(c: Config, request = api): Promise<ReserveTransfer[]> {
- const result: ReserveTransfer[]=[];
- for(let page=1;;page++) {
- const r=await request(c,`/transactions?type=transfer&limit=100&page=${page}`);
- for(const group of r.data) for(const t of group.attributes.transactions) {
- const parsed=transactionMetadata(t.notes);
- if(t.type !== 'transfer' || parsed?.meta.component !== 'reserve' || (parsed.meta.transferred !== false && parsed.meta.transferred !== undefined)) continue;
- result.push({groupId:group.id,journalId:t.transaction_journal_id,description:t.description,amount:t.amount,currency:t.currency_code,date:t.date,source:t.source_name,destination:t.destination_name,legacy:parsed.meta.transferred === undefined});
+ const result: ReserveTransfer[] = [];
+ function collect(r: any) {
+  for (const group of r.data) for (const t of group.attributes.transactions) {
+   const parsed = transactionMetadata(t.notes);
+   if (t.type !== 'transfer' || parsed?.meta.component !== 'reserve' || (parsed.meta.transferred !== false && parsed.meta.transferred !== undefined)) continue;
+   result.push({groupId:group.id,journalId:t.transaction_journal_id,description:t.description,amount:t.amount,currency:t.currency_code,date:t.date,source:t.source_name,destination:t.destination_name,legacy:parsed.meta.transferred === undefined});
+  }
  }
- if(page >= (r.meta?.pagination?.total_pages ?? 1)) break;
+ const first = await request(c, '/transactions?type=transfer&limit=100&page=1');
+ collect(first);
+ const pages = first.meta?.pagination?.total_pages ?? 1;
+ // Bounded parallel fetches preserve pagination order while reducing latency.
+ for (let start = 2; start <= pages; start += 4) {
+  const end = Math.min(pages, start + 3);
+  const batch = await Promise.all(Array.from({ length: end - start + 1 }, (_, i) =>
+   request(c, `/transactions?type=transfer&limit=100&page=${start+i}`)));
+  for (const r of batch) collect(r);
  }
  return result;
 }
+
 export async function markTransferred(c: Config, item: ReserveTransfer, request = api) {
  // Fetch current notes first to retain other metadata and make repeated clicks safe.
  const r=await request(c,`/transactions/${item.groupId}`);

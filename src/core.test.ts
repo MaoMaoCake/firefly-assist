@@ -21,3 +21,12 @@ const item:ReserveTransfer={groupId:'10',journalId:'1',description:'Coffee',amou
 test('mark updates notes in place, preserves other metadata and sibling splits, and is repeatable',async()=>{let puts=0;let transactions=[split('1',reserveNotes(false)),split('2','Other split notes')];const request=async(_c:Config,path:string,method?:string,body?:any)=>{assert.equal(path,'/transactions/10');if(method){assert.equal(method,'PUT');puts++;assert.equal(body.apply_rules,false);assert.equal(body.transactions.length,2);transactions=transactions.map((t,i)=>({...t,...body.transactions[i]}));}return {data:{attributes:{transactions}}};};await markTransferred(c,item,request);assert.equal(transactionMetadata(transactions[0].notes)?.meta.transferred,true);assert.equal(JSON.parse(transactions[0].notes).personal,'Keep this');assert.equal(transactions[1].notes,'Other split notes');await markTransferred(c,item,request);assert.equal(puts,1);});
 test('reconciliation accepts transfer completion after lost acknowledgement',async()=>{const op=create(c,all,'Coffee','1','3');op.legs[0].done=true;const leg=op.legs[1];leg.uncertain=true;const data=JSON.parse(String(leg.payload.notes));data['firefly-assist'].transferred=true;await syncOperation(c,op,async()=>{},async(_c,_path,method)=>{assert.equal(method,undefined);return {data:[{attributes:{transactions:[{...leg.payload,notes:JSON.stringify(data)}]}}]};});assert.ok(leg.done);});
 test('failed marking propagates for manual retry',async()=>{await assert.rejects(markTransferred(c,item,async(_c,_p,method)=>{if(method)throw new Error('Offline');return {data:{attributes:{transactions:[split('1',reserveNotes(false))]}}};}),/Offline/);});
+
+test('parallel transfer refresh retains page ordering', async () => {
+ const result = await untransferred(c, async (_c, path) => {
+  const page = Number(new URL('https://example.test' + path).searchParams.get('page'));
+  if (page === 2) await new Promise(resolve => setTimeout(resolve, 15));
+  return {data:[{id:String(page),attributes:{transactions:[split(String(page),reserveNotes(false))]}}],meta:{pagination:{total_pages:5}}};
+ });
+ assert.deepEqual(result.map(t => t.journalId), ['1','2','3','4','5']);
+});
