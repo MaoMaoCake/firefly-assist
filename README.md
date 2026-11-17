@@ -59,3 +59,9 @@ Credit purchases still record both ledger entries in Firefly. The reserve transf
 Build with `npm run build` and serve `dist/` from an HTTPS static host at the domain root. The app includes a standalone manifest, 192/512 PNG icons, an Apple touch icon, and a precaching service worker. Installation is under Settings: supported Chromium browsers show Install app when the browser offers an install prompt. On iPhone/iPad use Safari → Share → Add to Home Screen (enable Open as Web App if shown); on Mac Safari use File → Add to Dock.
 
 For local desktop testing, run `npm run build` then `npm run preview` and open http://localhost:4173. The development server does not enable the production service worker. For installation on a phone, use an HTTPS deployment: `http://192.168.x.x` is not a secure context. Open once online to cache the app before using it offline. The Firefly server URL is the API connection; the companion PWA needs its own HTTPS hosting. No native app store or database is required.
+
+## Appearance and faster Transfers
+
+Settings → Appearance offers System/Light/Dark modes and six Material 3-inspired accent palettes, persisted per browser using localStorage. Standalone PWAs cannot read Android wallpaper-derived colors, so accent selection is manual. The status-bar theme meta color follows the chosen mode where the browser supports it.
+
+Transfers stores the last successful Firefly response in IndexedDB, scoped to the instance URL and a SHA-256 hash of its PAT. Cached transfers appear immediately while an online refresh runs; an offline copy is for viewing only and may be outdated. A successful completion removes its entry from the local cache. Refresh still reads Firefly transfer history because the companion metadata cannot be filtered server-side, but pages are now fetched with up to four in flight.
