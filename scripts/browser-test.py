@@ -42,12 +42,15 @@ def account(name,extra):
  a=next((a for a in accounts if a['attributes']['name']==name),None)
  return a or api('/accounts',{'name':name,'currency_code':'USD','active':True,**extra})['data']
 reserve=account('Audit Reserve',{'type':'asset','account_role':'savingAsset'})
-card=account('Audit Card',{'type':'liabilities','liability_type':'debt','liability_direction':'credit','interest':'0','interest_period':'monthly','opening_balance':'0','opening_balance_date':'2026-11-17'})
+card=account('Audit Debt Card',{'type':'liabilities','liability_type':'debt','liability_direction':'debit','interest':'0','interest_period':'monthly','opening_balance':'0','opening_balance_date':'2026-11-17'})
 # Remove stale app shell cache only from this disposable browser, then reload current build.
 wd(base+'/execute/async',{'script':'const done=arguments[arguments.length-1]; Promise.all([navigator.serviceWorker.getRegistrations().then(rs=>Promise.all(rs.map(r=>r.unregister()))),caches.keys().then(ks=>Promise.all(ks.map(k=>caches.delete(k))))]).then(()=>done(true));','args':[]})
 wd(base+'/url',{'url':'http://localhost:8080'});wait('Cash purchase');tab('Settings')
 click('//button[contains(.,"Connect & refresh accounts")]');wait('Connected. Accounts refreshed.')
-select('Credit liability',card['id']);select('Savings account',reserve['id']);click('//button[normalize-space(.)="Save link in Firefly"]');wait('Card link saved in Firefly.')
+select('Credit liability',card['id']);
+checkbox=el('//label[contains(.,"Audit Reserve")]/input[@type="checkbox"]')
+if not wd(base+'/element/'+checkbox+'/selected'):click('//label[contains(.,"Audit Reserve")]/input[@type="checkbox"]')
+select('Primary savings account',reserve['id']);click('//button[normalize-space(.)="Save links in Firefly"]');wait('Card savings accounts saved in Firefly.')
 passed('Link credit card to reserve through UI')
 def purchase(label,amount='0.01'):
  fill('//input[@placeholder="e.g. Groceries"]',run+' '+label);fill('//input[@placeholder="0.00"]',amount);click('//button[contains(.,"Save purchase")]')
