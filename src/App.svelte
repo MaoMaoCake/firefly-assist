@@ -193,10 +193,17 @@
  {#each liabilities.filter(a=>cardLink(a)) as a}<p class="mapping">{a.attributes.name} → {cardAccounts(a.attributes.notes).ids.map(id=>reserveOptions.find(b=>b.id===id)?.attributes.name || 'Missing account').join(', ')} (primary: {assets.find(b=>b.id===cardLink(a))?.attributes.name || 'Missing account'})</p>{/each}
  <label>Credit liability<select value={linkingCard} onchange={(e)=>selectCardLink(e.currentTarget.value)}><option value="">Choose liability</option>{#each liabilities as a}<option value={a.id}>{a.attributes.name}</option>{/each}</select></label>
  {#if linkingCard}
- <fieldset><legend>Linked accounts (count toward reconciliation)</legend>
- {#each reserveOptions.filter(a=>a.id!==config.cash && a.attributes.currency_code===liabilities.find(c=>c.id===linkingCard)?.attributes.currency_code) as a}
- <label><input type="checkbox" checked={selectedReserves.includes(a.id)} onchange={(e)=>toggleReserve(a.id,e.currentTarget.checked)}/>{a.attributes.name}{a.attributes.type!=='asset'?' · Owed to me':''}</label>
+ <fieldset class="account-picker"><legend>Linked accounts</legend>
+ <p class="hint">Select all accounts that should count toward this card's reconciliation.</p>
+ <div class="account-options">
+ {#each reserveOptions.filter(a=>a.id!==config.cash && a.attributes.currency_code===liabilities.find(c=>c.id===linkingCard)?.attributes.currency_code) as a (a.id)}
+ <label class="account-option" class:is-selected={selectedReserves.includes(a.id)}>
+  <input class="account-option-input" type="checkbox" checked={selectedReserves.includes(a.id)} onchange={(e)=>toggleReserve(a.id,e.currentTarget.checked)}/>
+  <span class="account-option-copy"><span class="account-option-name">{a.attributes.name}</span><span class="account-option-type">{a.attributes.type==='asset'?'Savings asset':'Owed to me'}</span></span>
+  <span class="account-option-check" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg></span>
+ </label>
  {/each}
+ </div>
  </fieldset>
  <label>Primary savings account (receives new purchase reserves)<select bind:value={reserve}><option value="">Choose primary</option>{#each assets.filter(a=>selectedReserves.includes(a.id)) as a}<option value={a.id}>{a.attributes.name}</option>{/each}</select></label>
  <button disabled={busy||!reserve} onclick={saveLink}>Save links in Firefly</button>
