@@ -1,5 +1,5 @@
 import { openDB } from 'idb';
-export type Account = { id: string; attributes: { name: string; type: string; currency_code: string; currency_decimal_places?: number; current_balance?: string; notes?: string | null; active: boolean } };
+export type Account = { id: string; attributes: { name: string; type: string; currency_code: string; currency_decimal_places?: number; current_balance?: string; liability_direction?: string | null; notes?: string | null; active: boolean } };
 export type Config = { url: string; token: string; cash: string };
 export type Leg = { payload: Record<string, unknown>; done: boolean; uncertain?: boolean };
 export type Operation = { id: string; instance: string; name: string; amount: string; legs: Leg[]; error?: string };
@@ -23,21 +23,23 @@ export function linkedAccountsNotes(notes: string, primary: string, ids: string[
  return marker.test(notes) ? notes.replace(marker, block) : `${notes}${notes ? '\n\n' : ''}${block}`;
 }
 export function linkedNotes(notes: string, id: string) { return linkedAccountsNotes(notes, id, [id]); }
+export function isReserveAccount(a: Account): boolean { return a.attributes.type === 'asset' || (['liability', 'liabilities'].includes(a.attributes.type) && a.attributes.liability_direction === 'credit'); }
+export function reserveBalance(a: Account): number { const value = Number(a.attributes.current_balance); return a.attributes.type === 'asset' ? value : Math.abs(value); }
 export type CardReport = { card: Account; accounts: Account[]; outstanding: number; reserved: number; difference: number; missing: string[] };
 export function reconcileCards(all: Account[]): CardReport[] {
- return all.filter(a => ['liabilities','liability'].includes(a.attributes.type)).flatMap(card => {
+ return all.filter(a => ['liabilities','liability'].includes(a.attributes.type) && a.attributes.liability_direction !== 'credit').flatMap(card => {
   const mapping = cardAccounts(card.attributes.notes);
   if (!mapping.ids.length) return [];
   const savings: Account[] = [], missing: string[] = [];
   for (const id of mapping.ids) {
-   const account = all.find(a => a.id === id && a.attributes.type === 'asset' && a.attributes.currency_code === card.attributes.currency_code);
+   const account = all.find(a => a.id === id && isReserveAccount(a) && a.attributes.currency_code === card.attributes.currency_code);
    if (!account || account.attributes.current_balance === undefined || !Number.isFinite(Number(account.attributes.current_balance))) missing.push(id);
    else savings.push(account);
   }
   const cardBalance = Number(card.attributes.current_balance);
   if (card.attributes.current_balance === undefined || !Number.isFinite(cardBalance)) missing.push('Card balance unavailable');
   const outstanding = Math.abs(cardBalance);
-  const reserved = savings.reduce((sum, a) => sum + Number(a.attributes.current_balance), 0);
+  const reserved = savings.reduce((sum, a) => sum + reserveBalance(a), 0);
   return [{card, accounts:savings, outstanding, reserved, difference:reserved-outstanding, missing}];
  });
 }
