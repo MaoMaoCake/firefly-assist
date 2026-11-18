@@ -1,1 +1,25 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"><rect width="192" height="192" rx="44" fill="#142d26"/><ellipse cx="96" cy="114" rx="24" ry="38" fill="#d6f57a"/><path d="M88 85C20 20 25 130 88 100M104 85C172 20 167 130 104 100" fill="#a9c5ac"/><circle cx="96" cy="63" r="17" fill="#d6f57a"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-label="Firefly Assist">
+  <rect width="192" height="192" rx="42" fill="#00A3CE"/>
+  <g fill="none" stroke="#10344B" stroke-width="8" stroke-linecap="round">
+    <path d="M88 67Q83 52 69 42M104 67Q109 52 123 42"/>
+  </g>
+  <g fill="#10344B">
+    <circle cx="65" cy="40" r="7"/><circle cx="127" cy="40" r="7"/>
+    <ellipse cx="96" cy="113" rx="22" ry="45"/>
+    <circle cx="96" cy="77" r="17"/>
+    <ellipse cx="62" cy="102" rx="39" ry="20" transform="rotate(16 62 102)"/>
+    <ellipse cx="130" cy="102" rx="39" ry="20" transform="rotate(-16 130 102)"/>
+    <ellipse cx="68" cy="127" rx="29" ry="16" transform="rotate(-35 68 127)"/>
+    <ellipse cx="124" cy="127" rx="29" ry="16" transform="rotate(35 124 127)"/>
+  </g>
+  <g fill="#FFFFFF">
+    <ellipse cx="60" cy="104" rx="34" ry="15" transform="rotate(16 60 104)"/>
+    <ellipse cx="132" cy="104" rx="34" ry="15" transform="rotate(-16 132 104)"/>
+    <ellipse cx="67" cy="127" rx="25" ry="11" transform="rotate(-35 67 127)"/>
+    <ellipse cx="125" cy="127" rx="25" ry="11" transform="rotate(35 125 127)"/>
+    <ellipse cx="96" cy="137" rx="14" ry="19"/>
+  </g>
+  <g stroke="#FFFFFF" stroke-width="5" stroke-linecap="round">
+    <path d="M96 165v7M72 159l-6 5M120 159l6 5"/>
+  </g>
+</svg>
