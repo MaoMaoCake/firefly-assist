@@ -188,3 +188,39 @@ footer { display:flex; justify-content:space-between; gap:15px; padding:26px 0 3
 @media (prefers-reduced-motion:reduce) {
   *,*::before,*::after { transition:none!important; animation:none!important; scroll-behavior:auto!important; }
 }
+
+/* Selectable linked-account rows: visually custom, semantically native checkboxes. */
+.account-picker { min-width:0; margin:24px 0 16px; padding:0; border:0; }
+.account-picker legend { padding:0; font-size:13px; font-weight:700; color:var(--md-on-surface); }
+.account-picker > .hint { margin:7px 0 13px; }
+.account-options { display:grid; gap:9px; }
+.account-option {
+  position:relative; display:flex; align-items:center; justify-content:space-between; gap:14px;
+  min-width:0; min-height:64px; margin:0; padding:13px 15px;
+  border:1px solid var(--md-outline-variant); border-radius:16px;
+  background:var(--md-surface-container); cursor:pointer;
+  transition:background .18s,border-color .18s,box-shadow .18s;
+}
+.account-option:hover { border-color:var(--md-outline); background:var(--md-surface-container-high); }
+.account-option.is-selected { border-color:var(--md-primary); background:var(--md-secondary-container); }
+.account-option:focus-within { outline:3px solid var(--md-primary); outline-offset:2px; }
+.account-option-input {
+  position:absolute; inset:0; width:100%; height:100%; min-height:0; margin:0; padding:0;
+  opacity:0; cursor:pointer; border:0;
+}
+.account-option-input:focus { box-shadow:none; outline:none; }
+.account-option-copy { display:flex; flex-direction:column; gap:5px; min-width:0; pointer-events:none; }
+.account-option-name { overflow-wrap:anywhere; color:var(--md-on-surface); font-size:14px; font-weight:700; line-height:1.35; }
+.account-option-type { color:var(--md-on-surface-variant); font-size:11px; font-weight:520; }
+.account-option.is-selected .account-option-type { color:var(--md-on-secondary-container); }
+.account-option-check {
+  display:grid; place-items:center; flex:0 0 25px; width:25px; height:25px; border-radius:8px;
+  border:2px solid var(--md-outline); color:transparent; background:transparent;
+  transition:background .18s,border-color .18s,color .18s;
+  pointer-events:none;
+}
+.account-option.is-selected .account-option-check { border-color:var(--md-primary); background:var(--md-primary); color:var(--md-on-primary); }
+.account-option:not(.is-selected) .account-option-check svg { visibility:hidden; }
+@media (prefers-reduced-motion:reduce) {
+ .account-option,.account-option-check { transition:none; }
+}
