@@ -11,3 +11,4 @@
 !docker/
 !docker/nginx.conf
 !Dockerfile
+.env.*
