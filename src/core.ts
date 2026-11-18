@@ -1,11 +1,48 @@
 import { openDB } from 'idb';
-export type Account = { id: string; attributes: { name: string; type: string; currency_code: string; currency_decimal_places?: number; notes?: string | null; active: boolean } };
+export type Account = { id: string; attributes: { name: string; type: string; currency_code: string; currency_decimal_places?: number; current_balance?: string; liability_direction?: string | null; notes?: string | null; active: boolean } };
 export type Config = { url: string; token: string; cash: string };
 export type Leg = { payload: Record<string, unknown>; done: boolean; uncertain?: boolean };
 export type Operation = { id: string; instance: string; name: string; amount: string; legs: Leg[]; error?: string };
 const marker = /\[firefly-assist\]\s*([\s\S]*?)\s*\[\/firefly-assist\]/;
-export function link(notes: string | null | undefined = ''): string { const m = (notes || '').match(marker); if (!m) return ''; const data = JSON.parse(m[1]); if (data.version !== 1) throw new Error('Unsupported account metadata version'); return data.linked_asset_account_id || ''; }
-export function linkedNotes(notes: string, id: string) { link(notes); const block = `[firefly-assist]\n${JSON.stringify({version: 1, linked_asset_account_id: id})}\n[/firefly-assist]`; return marker.test(notes) ? notes.replace(marker, block) : `${notes}${notes ? '\n\n' : ''}${block}`; }
+export type CardAccounts = { primary: string; ids: string[] };
+export function cardAccounts(notes: string | null | undefined = ''): CardAccounts {
+ const m = (notes || '').match(marker);
+ if (!m) return { primary: '', ids: [] };
+ const data = JSON.parse(m[1]);
+ if (data.version !== 1) throw new Error('Unsupported account metadata version');
+ const primary = typeof data.linked_asset_account_id === 'string' ? data.linked_asset_account_id : '';
+ const ids = Array.isArray(data.linked_asset_account_ids) ? data.linked_asset_account_ids : [];
+ if (ids.some((id: unknown) => typeof id !== 'string')) throw new Error('Invalid linked savings account metadata');
+ return { primary, ids: [...new Set([primary, ...ids].filter(Boolean))] };
+}
+export function link(notes: string | null | undefined = ''): string { return cardAccounts(notes).primary; }
+export function linkedAccountsNotes(notes: string, primary: string, ids: string[]) {
+ cardAccounts(notes);
+ if (!primary || !ids.includes(primary) || new Set(ids).size !== ids.length || ids.some(id => !id)) throw new Error('Select a primary account included in linked savings accounts.');
+ const block = `[firefly-assist]\n${JSON.stringify({version: 1, linked_asset_account_id: primary, linked_asset_account_ids: ids})}\n[/firefly-assist]`;
+ return marker.test(notes) ? notes.replace(marker, block) : `${notes}${notes ? '\n\n' : ''}${block}`;
+}
+export function linkedNotes(notes: string, id: string) { return linkedAccountsNotes(notes, id, [id]); }
+export function isReserveAccount(a: Account): boolean { return a.attributes.type === 'asset' || (['liability', 'liabilities'].includes(a.attributes.type) && a.attributes.liability_direction === 'credit'); }
+export function reserveBalance(a: Account): number { const value = Number(a.attributes.current_balance); return a.attributes.type === 'asset' ? value : Math.abs(value); }
+export type CardReport = { card: Account; accounts: Account[]; outstanding: number; reserved: number; difference: number; missing: string[] };
+export function reconcileCards(all: Account[]): CardReport[] {
+ return all.filter(a => ['liabilities','liability'].includes(a.attributes.type) && a.attributes.liability_direction !== 'credit').flatMap(card => {
+  const mapping = cardAccounts(card.attributes.notes);
+  if (!mapping.ids.length) return [];
+  const savings: Account[] = [], missing: string[] = [];
+  for (const id of mapping.ids) {
+   const account = all.find(a => a.id === id && isReserveAccount(a) && a.attributes.currency_code === card.attributes.currency_code);
+   if (!account || account.attributes.current_balance === undefined || !Number.isFinite(Number(account.attributes.current_balance))) missing.push(id);
+   else savings.push(account);
+  }
+  const cardBalance = Number(card.attributes.current_balance);
+  if (card.attributes.current_balance === undefined || !Number.isFinite(cardBalance)) missing.push('Card balance unavailable');
+  const outstanding = Math.abs(cardBalance);
+  const reserved = savings.reduce((sum, a) => sum + reserveBalance(a), 0);
+  return [{card, accounts:savings, outstanding, reserved, difference:reserved-outstanding, missing}];
+ });
+}
 const db = () => openDB('firefly-assist', 1, { upgrade(db) { db.createObjectStore('settings'); db.createObjectStore('queue', { keyPath: 'id' }); } });
 export async function get<T>(key: string): Promise<T | undefined> { return (await db()).get('settings', key); }
 export async function set(key: string, value: unknown) { return (await db()).put('settings', value, key); }

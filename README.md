@@ -146,3 +146,11 @@ Transfers stores the last successful Firefly response in IndexedDB, scoped to th
 ## Cyan UI refresh
 
 The default accent is the Firefly Assist brand color `#00A3CE`. The interface now uses responsive tonal surfaces, high-contrast text on cyan controls, rounded navigation, elevated activity panels, and compact mobile forms. Existing browser appearance preferences continue to work; users who selected another accent keep their choice.
+
+## Card reconciliation reports
+
+Reports shows only credit liabilities with linked savings accounts. It compares the absolute current Firefly liability balance with the sum of linked asset account balances, displaying each account, shortfalls/excesses and incomplete balance data. The difference is informational only: no transactions are created or modified by reporting. Pending physical transfers are listed separately (retrieved from Firefly, with the last cached transfer list as a fallback); they are already reflected in Firefly and are not added to totals. Reports requires an online connection for fresh balances.
+
+Settings supports multiple savings assets per liability with one **primary** account. New credit purchases reserve funds only in the primary account; other linked savings accounts are reconciliation-only. Existing version-1 `linked_asset_account_id` metadata is recognized without migration; new metadata retains that field for legacy readers and adds `linked_asset_account_ids`. To avoid double counting, Settings blocks assigning the same savings asset to multiple cards. Reconciliation uses the entire savings account balance, so reserve accounts should not hold unrelated funds.
+
+Linked reconciliation accounts may also be liability accounts with `liability_direction: "credit"` (Firefly’s “I am owed this amount”). Their absolute outstanding balance contributes to the reserved total. Debts owed by you are not eligible. The primary destination for newly generated reserve transfers must still be an asset account.
