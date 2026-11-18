@@ -71,8 +71,25 @@ export function create(c: Config, all: Account[], name: string, amount: string, 
  } else add('purchase','withdrawal',c.cash);
  return op;
 }
+/** Record a repayment as one deposit into the configured primary cash asset. */
+export function createReimbursement(c: Config, all: Account[], name: string, amount: string): Operation {
+ // Reuse the purchase validator so amounts, precision and primary-account checks stay consistent.
+ const op = create(c, all, name, amount);
+ const leg = op.legs[0];
+ const { source_id: _source, ...payload } = leg.payload;
+ leg.payload = {
+  ...payload,
+  type: 'deposit',
+  source_name: 'Reimbursement',
+  destination_id: c.cash,
+  external_id: `firefly-assist:${op.id}:reimbursement`,
+  notes: JSON.stringify({ 'firefly-assist': { version: 1, operation_id: op.id, component: 'reimbursement' } }),
+ };
+ return op;
+}
+
 export async function syncOperation(c: Config, op: Operation, persist = save, request = api) {
- if(op.instance !== c.url) throw new Error('This purchase belongs to a different Firefly instance.');
+ if(op.instance !== c.url) throw new Error('This transaction belongs to a different Firefly instance.');
  for (const leg of op.legs) {
  if(leg.done) continue;
  const r = await request(c, `/search/transactions?query=${encodeURIComponent(`external_id:"${leg.payload.external_id}"`)}&limit=100`);
@@ -95,7 +112,7 @@ export type ReserveTransfer = { groupId: string; journalId: string; description:
 export function transactionMetadata(notes: unknown) {
  if(typeof notes !== 'string') return null;
  try { const data=JSON.parse(notes); const meta=data?.['firefly-assist'];
- if(meta?.version !== 1 || typeof meta.operation_id !== 'string' || !['purchase','reserve'].includes(meta.component)) return null;
+ if(meta?.version !== 1 || typeof meta.operation_id !== 'string' || !['purchase','reserve','reimbursement'].includes(meta.component)) return null;
  return { data, meta };
  } catch { return null; }
 }

@@ -2,7 +2,7 @@
  import { onMount } from 'svelte';
  import InstallApp from './InstallApp.svelte';
  import { getThemeSettings, updateTheme, type ThemeMode, type ThemeAccent } from './theme';
- import { get, set, queue, save, api, accounts, create, sync, link, cardAccounts, linkedAccountsNotes, reconcileCards, isReserveAccount, reserveBalance, type CardReport, type Account, type Config, type Operation, untransferred, markTransferred, cachedTransfers, saveTransfersCache, removeCachedTransfer, type ReserveTransfer } from './core';
+ import { get, set, queue, save, api, accounts, create, createReimbursement, sync, link, cardAccounts, linkedAccountsNotes, reconcileCards, isReserveAccount, reserveBalance, type CardReport, type Account, type Config, type Operation, untransferred, markTransferred, cachedTransfers, saveTransfersCache, removeCachedTransfer, type ReserveTransfer } from './core';
  let tab = 'cash', name = '', amount = '', card = '', linkingCard = '', reserve = '', selectedReserves: string[] = [], message = '', busy = false, recording = false;
  let transfers: ReserveTransfer[] = [], transfersLoaded = false, transfersRefreshing = false, transferCacheTime = 0;
  let appearance = getThemeSettings();
@@ -107,7 +107,7 @@
   await api(stored,`/accounts/${linkingCard}`,'PUT',{notes:linkedAccountsNotes(fresh.data.attributes.notes || '',reserve,selectedReserves)});
   all=await accounts(stored); await set('accounts',all);message='Card savings accounts saved in Firefly.';
  });}
- async function record(){if(recording)return; recording=true; try{const stored=await get<Config>('config'); if(!stored) throw new Error('Configure Firefly first.'); if(tab==='credit'&&!card) throw new Error('Choose a credit card.'); const op=create(stored,all,name,amount,tab==='credit'?card:''); await save(op); operations=await queue(); name='';amount='';message='Saved on this device.'; if(navigator.onLine) await synchronize();}catch(e){message=String(e);}finally{recording=false;} }
+ async function record(){if(recording)return; recording=true; try{const stored=await get<Config>('config'); if(!stored) throw new Error('Configure Firefly first.'); if(tab==='credit'&&!card) throw new Error('Choose a credit card.'); const op=tab==='reimburse' ? createReimbursement(stored,all,name,amount) : create(stored,all,name,amount,tab==='credit'?card:''); await save(op); operations=await queue(); name='';amount='';message='Saved on this device.'; if(navigator.onLine) await synchronize();}catch(e){message=String(e);}finally{recording=false;} }
 </script>
 
 <svelte:head><meta name="description" content="A simple offline companion for Firefly III"/></svelte:head>
@@ -116,17 +116,17 @@
  <header><a class="brand" href="/"><span class="brand-mark" aria-hidden="true">f</span><span>firefly<span class="light"> / assist</span></span></a><span class="badge"><span class="status-dot" aria-hidden="true"></span>Offline-ready workspace</span></header>
  <section class="intro"><div class="intro-copy"><p class="eyebrow">YOUR MONEY, IN SYNC</p><h1>Every purchase, <span class="headline-accent">under control.</span></h1><p>Capture spending in seconds, keep card repayments organized, and sync with Firefly whenever you reconnect.</p></div><div class="intro-decoration" aria-hidden="true"><span class="decor-orbit"></span><span class="decor-dot"></span></div></section>
  <div class="workspace" id="workspace">
- <nav aria-label="Main tabs"><span class="nav-label">WORKSPACE</span>{#each [['cash','Cash'],['credit','Credit'],['transfers','Transfers'],['reports','Reports'],['settings','Settings']] as [id,label]}<button class:active={tab===id} aria-current={tab===id ? "page" : undefined} disabled={busy||recording} onclick={()=>selectTab(id)}>{label}</button>{/each}</nav>
+ <nav aria-label="Main tabs"><span class="nav-label">WORKSPACE</span>{#each [['cash','Cash'],['credit','Credit'],['reimburse','Reimburse'],['transfers','Transfers'],['reports','Reports'],['settings','Settings']] as [id,label]}<button class:active={tab===id} aria-current={tab===id ? "page" : undefined} disabled={busy||recording} onclick={()=>selectTab(id)}>{label}</button>{/each}</nav>
  <section class="panel" aria-label="Transaction workspace">
  <div hidden={tab!=='settings'}><InstallApp/><hr/></div>
- {#if tab==='cash' || tab==='credit'}
- <div class="panel-heading"><div><p class="eyebrow">NEW TRANSACTION</p><h2>{tab==='cash'?'Cash purchase':'Credit purchase'}</h2></div><span class="symbol">{tab==='cash'?'↗':'⇄'}</span></div>
+ {#if tab==='cash' || tab==='credit' || tab==='reimburse'}
+ <div class="panel-heading"><div><p class="eyebrow">NEW TRANSACTION</p><h2>{tab==='cash'?'Cash purchase':tab==='credit'?'Credit purchase':'Reimbursement'}</h2></div><span class="symbol">{tab==='credit'?'⇄':tab==='reimburse'?'↙':'↗'}</span></div>
  <form onsubmit={(e)=>{e.preventDefault();void record();}}>
  {#if tab==='credit'}<label>Credit card<select bind:value={card} required><option value="">Choose a linked card</option>{#each liabilities.filter(a=>cardLink(a)) as a}<option value={a.id}>{a.attributes.name}</option>{/each}</select></label>{/if}
- <label>Transaction name<input bind:value={name} placeholder="e.g. Groceries" required maxlength="255"/></label>
+ <label>Transaction name<input bind:value={name} placeholder={tab==='reimburse' ? 'e.g. Dinner paid back by Alex' : 'e.g. Groceries'} required maxlength="255"/></label>
  <label>Amount <span class="light">{assets.find(a=>a.id===config.cash)?.attributes.currency_code || ''}</span><input class="amount" bind:value={amount} inputmode="decimal" placeholder="0.00" required/></label>
- <p class="hint">{tab==='cash'?'Paid from your primary cash account.':'A reserve transfer is recorded in Firefly. Move the money yourself, then mark it transferred in Transfers.'}</p>
- <button class="primary" disabled={busy||recording}>Save purchase <span>↗</span></button>
+ <p class="hint">{tab==='cash'?'Paid from your primary cash account.':tab==='reimburse'?'One deposit into your primary cash account. No savings transfer or credit-card adjustment.':'A reserve transfer is recorded in Firefly. Move the money yourself, then mark it transferred in Transfers.'}</p>
+ <button class="primary" disabled={busy||recording}>{tab==='reimburse'?'Save reimbursement':'Save purchase'} <span>↗</span></button>
  </form>
  {:else if tab==='transfers'}
  <div class="queue-heading"><h2>To transfer</h2><button disabled={busy||transfersRefreshing} onclick={loadTransfers}>{transfersRefreshing?'Refreshing…':'Refresh'}</button></div>

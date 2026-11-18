@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { create, link, cardAccounts, linkedAccountsNotes, reconcileCards, isReserveAccount, reserveBalance, linkedNotes, syncOperation, type Account, type Config } from './core';
+import { create, createReimbursement, link, cardAccounts, linkedAccountsNotes, reconcileCards, isReserveAccount, reserveBalance, linkedNotes, syncOperation, type Account, type Config } from './core';
 const c: Config={url:'https://example.test',token:'test',cash:'1'};
 const all: Account[]=[['1','asset'],['2','expense'],['3','liabilities'],['4','asset']].map(([id,type])=>({id,attributes:{name:id,type,currency_code:'USD',active:true,notes:id==='3'?linkedNotes('My notes','4'):''}}));
 test('account metadata preserves user notes and updates existing link',()=>{const notes=linkedNotes('Personal notes','4');assert.equal(link(notes),'4');assert.equal(link(linkedNotes(notes,'5')),'5');assert.ok(linkedNotes(notes,'5').startsWith('Personal notes'));});
@@ -85,4 +85,54 @@ test('owed-to-me credit liabilities can be linked for reconciliation but cannot 
 test('debt liabilities are not eligible repayment accounts',()=>{
  const debt:Account={id:'8',attributes:{name:'Debt',type:'liabilities',currency_code:'USD',liability_direction:'debit',active:true,current_balance:'-5'}};
  assert.equal(isReserveAccount(debt),false);
+});
+
+
+test('reimbursement is a single deposit into the primary account, never a reserve transfer', () => {
+ const op = createReimbursement(c, all, 'Dinner paid back by Alex', '12.50');
+ assert.equal(op.legs.length, 1);
+ const payload = op.legs[0].payload;
+ assert.equal(payload.type, 'deposit');
+ assert.equal(payload.destination_id, '1');
+ assert.equal(payload.source_name, 'Reimbursement');
+ assert.equal(payload.source_id, undefined);
+ assert.equal(payload.destination_name, undefined);
+ assert.equal(payload.amount, '12.50');
+ assert.equal(payload.currency_code, 'USD');
+ assert.equal(payload.description, 'Dinner paid back by Alex');
+ assert.match(String(payload.external_id), /:reimbursement$/);
+ assert.equal(transactionMetadata(payload.notes)?.meta.component, 'reimbursement');
+ assert.equal(transactionMetadata(payload.notes)?.meta.transferred, undefined);
+});
+test('reimbursements reject invalid amounts and missing primary accounts', () => {
+ assert.throws(() => createReimbursement(c, all, 'Repayment', '0'), /positive amount/);
+ assert.throws(() => createReimbursement(c, all, 'Repayment', '1.001'), /decimal places/);
+ assert.throws(() => createReimbursement({...c, cash: 'missing'}, all, 'Repayment', '1'), /primary cash account/);
+});
+test('reimbursement sync posts exactly one deposit and deduplicates retry', async () => {
+ const op = createReimbursement(c, all, 'Repayment', '25');
+ let posts = 0;
+ await syncOperation(c, op, async () => {}, async (_c, _path, method, body: any) => {
+  if (method === 'POST') {
+   posts++;
+   assert.equal(body.transactions.length, 1);
+   assert.equal(body.transactions[0].type, 'deposit');
+   assert.equal(body.transactions[0].destination_id, c.cash);
+  }
+  return { data: [] };
+ });
+ await syncOperation(c, op, async () => {}, async () => { throw new Error('Completed operation should not contact server'); });
+ assert.equal(posts, 1);
+ assert.ok(op.legs[0].done);
+});
+test('reimbursement lost acknowledgement can be reconciled by external ID', async () => {
+ const op = createReimbursement(c, all, 'Repayment', '5');
+ op.legs[0].uncertain = true;
+ let posts = 0;
+ await syncOperation(c, op, async () => {}, async (_c, _path, method) => {
+  if (method === 'POST') posts++;
+  return { data: [{attributes:{transactions:[op.legs[0].payload]}}] };
+ });
+ assert.equal(posts, 0);
+ assert.equal(op.legs[0].done, true);
 });
