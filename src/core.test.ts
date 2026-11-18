@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { create, link, cardAccounts, linkedAccountsNotes, reconcileCards, linkedNotes, syncOperation, type Account, type Config } from './core';
+import { create, link, cardAccounts, linkedAccountsNotes, reconcileCards, isReserveAccount, reserveBalance, linkedNotes, syncOperation, type Account, type Config } from './core';
 const c: Config={url:'https://example.test',token:'test',cash:'1'};
 const all: Account[]=[['1','asset'],['2','expense'],['3','liabilities'],['4','asset']].map(([id,type])=>({id,attributes:{name:id,type,currency_code:'USD',active:true,notes:id==='3'?linkedNotes('My notes','4'):''}}));
 test('account metadata preserves user notes and updates existing link',()=>{const notes=linkedNotes('Personal notes','4');assert.equal(link(notes),'4');assert.equal(link(linkedNotes(notes,'5')),'5');assert.ok(linkedNotes(notes,'5').startsWith('Personal notes'));});
@@ -66,4 +66,23 @@ test('missing linked account is not silently reported matched',()=>{
  copy[2].attributes.notes=linkedAccountsNotes('','4',['4','missing']);
  const report=reconcileCards(copy)[0];
  assert.deepEqual(report.missing,['missing']);
+});
+
+test('owed-to-me credit liabilities can be linked for reconciliation but cannot be the primary reserve',()=>{
+ const copy=structuredClone(all);
+ copy[2].attributes.current_balance='-15.00';
+ copy[2].attributes.notes=linkedAccountsNotes('','4',['4','7']);
+ copy[3].attributes.current_balance='10.00';
+ copy.push({id:'7',attributes:{name:'Money owed to me',type:'liabilities',currency_code:'USD',liability_direction:'credit',current_balance:'-5.00',active:true}});
+ assert.equal(isReserveAccount(copy[4]),true);
+ const reports=reconcileCards(copy);
+ assert.equal(reports.length,1);
+ assert.equal(reports[0].reserved,15);
+ assert.equal(reports[0].difference,0);
+ assert.equal(reserveBalance(copy[4]),5);
+ assert.equal(create(c,copy,'Coffee','1','3').legs[1].payload.destination_id,'4');
+});
+test('debt liabilities are not eligible repayment accounts',()=>{
+ const debt:Account={id:'8',attributes:{name:'Debt',type:'liabilities',currency_code:'USD',liability_direction:'debit',active:true,current_balance:'-5'}};
+ assert.equal(isReserveAccount(debt),false);
 });
