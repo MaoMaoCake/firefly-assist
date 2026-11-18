@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { create, link, linkedNotes, syncOperation, type Account, type Config } from './core';
+import { create, link, cardAccounts, linkedAccountsNotes, reconcileCards, linkedNotes, syncOperation, type Account, type Config } from './core';
 const c: Config={url:'https://example.test',token:'test',cash:'1'};
 const all: Account[]=[['1','asset'],['2','expense'],['3','liabilities'],['4','asset']].map(([id,type])=>({id,attributes:{name:id,type,currency_code:'USD',active:true,notes:id==='3'?linkedNotes('My notes','4'):''}}));
 test('account metadata preserves user notes and updates existing link',()=>{const notes=linkedNotes('Personal notes','4');assert.equal(link(notes),'4');assert.equal(link(linkedNotes(notes,'5')),'5');assert.ok(linkedNotes(notes,'5').startsWith('Personal notes'));});
@@ -29,4 +29,41 @@ test('parallel transfer refresh retains page ordering', async () => {
   return {data:[{id:String(page),attributes:{transactions:[split(String(page),reserveNotes(false))]}}],meta:{pagination:{total_pages:5}}};
  });
  assert.deepEqual(result.map(t => t.journalId), ['1','2','3','4','5']);
+});
+
+test('legacy metadata remains primary and only account',()=>{
+ const old='[firefly-assist]\\n{"version":1,"linked_asset_account_id":"4"}\\n[/firefly-assist]'.replaceAll('\\n','\n');
+ assert.deepEqual(cardAccounts(old),{primary:'4',ids:['4']});
+});
+test('multiple savings accounts preserve notes and route purchases to primary',()=>{
+ const notes=linkedAccountsNotes('User note','5',['4','5']);
+ assert.deepEqual(cardAccounts(notes),{primary:'5',ids:['5','4']});
+ assert.ok(notes.startsWith('User note'));
+ const copy=structuredClone(all);
+ copy.push({id:'5',attributes:{name:'Second reserve',type:'asset',currency_code:'USD',active:true,current_balance:'4.00'}});
+ copy[2].attributes.notes=notes;
+ const op=create(c,copy,'Coffee','3','3');
+ assert.equal(op.legs[1].payload.destination_id,'5');
+});
+test('reconciliation sums linked balances and excludes unlinked cards',()=>{
+ const copy=structuredClone(all);
+ copy[2].attributes.current_balance='-15.00';
+ copy[2].attributes.notes=linkedAccountsNotes('','4',['4','5']);
+ copy[3].attributes.current_balance='10.00';
+ copy.push({id:'5',attributes:{name:'Secondary',type:'asset',currency_code:'USD',active:true,current_balance:'4.00'}});
+ copy.push({id:'6',attributes:{name:'Unlinked card',type:'liabilities',currency_code:'USD',active:true,current_balance:'-20.00'}});
+ const reports=reconcileCards(copy);
+ assert.equal(reports.length,1);
+ assert.equal(reports[0].outstanding,15);
+ assert.equal(reports[0].reserved,14);
+ assert.equal(reports[0].difference,-1);
+ assert.equal(reports[0].accounts.length,2);
+});
+test('missing linked account is not silently reported matched',()=>{
+ const copy=structuredClone(all);
+ copy[2].attributes.current_balance='-10';
+ copy[3].attributes.current_balance='10';
+ copy[2].attributes.notes=linkedAccountsNotes('','4',['4','missing']);
+ const report=reconcileCards(copy)[0];
+ assert.deepEqual(report.missing,['missing']);
 });
