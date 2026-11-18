@@ -7,7 +7,7 @@
  let transfers: ReserveTransfer[] = [], transfersLoaded = false, transfersRefreshing = false, transferCacheTime = 0;
  let appearance = getThemeSettings();
  const accents: { id: ThemeAccent; label: string }[] = [
-  { id: 'forest', label: 'Forest' }, { id: 'purple', label: 'Purple' },
+  { id: 'cyan', label: 'Cyan · brand' }, { id: 'forest', label: 'Forest' }, { id: 'purple', label: 'Purple' },
   { id: 'blue', label: 'Blue' }, { id: 'teal', label: 'Teal' },
   { id: 'orange', label: 'Orange' }, { id: 'rose', label: 'Rose' },
  ];
@@ -65,14 +65,14 @@
 <svelte:head><meta name="description" content="A simple offline companion for Firefly III"/></svelte:head>
 <main>
  <a class="skip-link" href="#workspace">Skip to workspace</a>
- <header><a class="brand" href="/"><span class="brand-mark" aria-hidden="true">f</span><span>firefly<span class="light"> / assist</span></span></a><span class="badge">Saved on your device</span></header>
- <section class="intro"><p class="eyebrow">FIREFLY III COMPANION</p><h1>Your spending workspace</h1><p>Record purchases, set aside repayments, and keep Firefly up to date.</p></section>
+ <header><a class="brand" href="/"><span class="brand-mark" aria-hidden="true">f</span><span>firefly<span class="light"> / assist</span></span></a><span class="badge"><span class="status-dot" aria-hidden="true"></span>Offline-ready workspace</span></header>
+ <section class="intro"><div class="intro-copy"><p class="eyebrow">YOUR MONEY, IN SYNC</p><h1>Every purchase, <span class="headline-accent">under control.</span></h1><p>Capture spending in seconds, keep card repayments organized, and sync with Firefly whenever you reconnect.</p></div><div class="intro-decoration" aria-hidden="true"><span class="decor-orbit"></span><span class="decor-dot"></span></div></section>
  <div class="workspace" id="workspace">
- <nav aria-label="Main tabs">{#each [['cash','Cash'],['credit','Credit'],['transfers','Transfers'],['settings','Settings']] as [id,label]}<button class:active={tab===id} aria-current={tab===id ? "page" : undefined} disabled={busy||recording} onclick={()=>selectTab(id)}>{label}</button>{/each}</nav>
+ <nav aria-label="Main tabs"><span class="nav-label">WORKSPACE</span>{#each [['cash','Cash'],['credit','Credit'],['transfers','Transfers'],['settings','Settings']] as [id,label]}<button class:active={tab===id} aria-current={tab===id ? "page" : undefined} disabled={busy||recording} onclick={()=>selectTab(id)}>{label}</button>{/each}</nav>
  <section class="panel" aria-label="Transaction workspace">
  <div hidden={tab!=='settings'}><InstallApp/><hr/></div>
  {#if tab==='cash' || tab==='credit'}
- <div class="panel-heading"><div><p class="eyebrow">{tab==='cash'?'NEW TRANSACTION':'NEW TRANSACTION'}</p><h2>{tab==='cash'?'Cash purchase':'Credit purchase'}</h2></div><span class="symbol">{tab==='cash'?'↗':'⇄'}</span></div>
+ <div class="panel-heading"><div><p class="eyebrow">NEW TRANSACTION</p><h2>{tab==='cash'?'Cash purchase':'Credit purchase'}</h2></div><span class="symbol">{tab==='cash'?'↗':'⇄'}</span></div>
  <form onsubmit={(e)=>{e.preventDefault();void record();}}>
  {#if tab==='credit'}<label>Credit card<select bind:value={card} required><option value="">Choose a linked card</option>{#each liabilities.filter(a=>cardLink(a)) as a}<option value={a.id}>{a.attributes.name}</option>{/each}</select></label>{/if}
  <label>Transaction name<input bind:value={name} placeholder="e.g. Groceries" required maxlength="255"/></label>
@@ -123,9 +123,9 @@
  {/if}
  {#if message}<p class="notice" role="status">{message}</p>{/if}
  </section>
- <section class="queue"><p class="eyebrow">DEVICE ACTIVITY</p><div class="queue-heading"><h3>{pending.length ? `${pending.length} waiting to sync` : 'No pending purchases'}</h3><button disabled={busy||recording} onclick={synchronize}>{busy?'Working…':'Sync / retry'}</button></div>
+ <section class="queue"><div class="activity-topline"><span class="activity-icon" aria-hidden="true">↻</span><p class="eyebrow">DEVICE ACTIVITY</p></div><div class="queue-heading"><h3>{pending.length ? `${pending.length} waiting to sync` : 'No pending purchases'}</h3><button disabled={busy||recording} onclick={synchronize}>{busy?'Working…':'Sync / retry'}</button></div>
  {#each pending as op}<article><strong>{op.name}</strong><span>{op.amount}</span><p>{op.legs.filter(l=>l.done).length} / {op.legs.length} entries synced</p>{#if op.error}<p class="error">{op.error}</p>{/if}</article>{/each}
  <p class="hint">Pending purchases stay on this device until synced. Keep browser data to retain them.</p></section>
  </div>
- <footer><span>firefly / assist</span><span>Purchases saved locally. Synced to your Firefly.</span></footer>
+ <footer><span>firefly <span class="light">/ assist</span></span><span>Built for a smoother way to stay on top of spending.</span></footer>
 </main>

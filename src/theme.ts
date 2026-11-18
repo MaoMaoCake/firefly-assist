@@ -1,10 +1,10 @@
 export type ThemeMode = 'system' | 'light' | 'dark';
-export type ThemeAccent = 'forest' | 'purple' | 'blue' | 'teal' | 'orange' | 'rose';
+export type ThemeAccent = 'cyan' | 'forest' | 'purple' | 'blue' | 'teal' | 'orange' | 'rose';
 export interface ThemeSettings { mode: ThemeMode; accent: ThemeAccent }
 const key = 'firefly-assist-appearance';
-const defaults: ThemeSettings = { mode: 'system', accent: 'forest' };
+const defaults: ThemeSettings = { mode: 'system', accent: 'cyan' };
 const modes: ThemeMode[] = ['system', 'light', 'dark'];
-const accents: ThemeAccent[] = ['forest', 'purple', 'blue', 'teal', 'orange', 'rose'];
+const accents: ThemeAccent[] = ['cyan', 'forest', 'purple', 'blue', 'teal', 'orange', 'rose'];
 const media = window.matchMedia('(prefers-color-scheme: dark)');
 function read(): ThemeSettings {
   try {
@@ -21,7 +21,7 @@ export function applyTheme(): void {
   root.dataset.accent = current.accent;
   root.style.colorScheme = dark ? 'dark' : 'light';
   const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-  if (meta) meta.content = dark ? '#151a1b' : '#faf9ff';
+  if (meta) meta.content = dark ? '#0c171c' : '#f3fbfd';
 }
 export function updateTheme(settings: Partial<ThemeSettings>): void {
   current = { ...current, ...settings };
