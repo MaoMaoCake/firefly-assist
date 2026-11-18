@@ -2,7 +2,7 @@
  import { onMount } from 'svelte';
  import InstallApp from './InstallApp.svelte';
  import { getThemeSettings, updateTheme, type ThemeMode, type ThemeAccent } from './theme';
- import { get, set, queue, save, api, accounts, create, sync, link, cardAccounts, linkedAccountsNotes, reconcileCards, type CardReport, type Account, type Config, type Operation, untransferred, markTransferred, cachedTransfers, saveTransfersCache, removeCachedTransfer, type ReserveTransfer } from './core';
+ import { get, set, queue, save, api, accounts, create, sync, link, cardAccounts, linkedAccountsNotes, reconcileCards, isReserveAccount, reserveBalance, type CardReport, type Account, type Config, type Operation, untransferred, markTransferred, cachedTransfers, saveTransfersCache, removeCachedTransfer, type ReserveTransfer } from './core';
  let tab = 'cash', name = '', amount = '', card = '', linkingCard = '', reserve = '', selectedReserves: string[] = [], message = '', busy = false, recording = false;
  let transfers: ReserveTransfer[] = [], transfersLoaded = false, transfersRefreshing = false, transferCacheTime = 0;
  let appearance = getThemeSettings();
@@ -17,7 +17,8 @@
  let config: Config = {url:'',token:'',cash:''};
  let all: Account[] = [], operations: Operation[] = [];
  $: assets = all.filter(a=>a.attributes.type==='asset');
- $: liabilities = all.filter(a=>['liabilities','liability'].includes(a.attributes.type));
+ $: liabilities = all.filter(a=>['liabilities','liability'].includes(a.attributes.type) && a.attributes.liability_direction !== 'credit');
+ $: reserveOptions = all.filter(isReserveAccount);
  $: pending = operations.filter(o=>!o.legs.every(l=>l.done));
  function cardLink(a: Account) { try {return link(a.attributes.notes);} catch{return '';} }
  function selectCardLink(id: string) {
@@ -29,7 +30,7 @@
  }
  function toggleReserve(id: string, checked: boolean) {
   selectedReserves=checked ? [...selectedReserves,id] : selectedReserves.filter(x=>x!==id);
-  if(!selectedReserves.includes(reserve)) reserve=selectedReserves[0] || '';
+  if(!selectedReserves.includes(reserve)) reserve=selectedReserves.find(id=>assets.some(a=>a.id===id)) || '';
  }
  function currency(value: number, code: string) { return `${code} ${value.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`; }
  async function loadReports() {
@@ -96,10 +97,10 @@
  async function saveLink(){await run(async()=>{
   const stored=await get<Config>('config'); if(!stored) throw new Error('Connect first.');
   const selected=liabilities.find(a=>a.id===linkingCard);
-  if(!selected || !reserve || !selectedReserves.includes(reserve) || !selectedReserves.length) throw new Error('Choose a card, linked savings accounts and a primary account.');
+  if(!selected || !reserve || !assets.some(a=>a.id===reserve) || !selectedReserves.includes(reserve) || !selectedReserves.length) throw new Error('Choose a card, linked savings accounts and a primary account.');
   for(const id of selectedReserves) {
-   const target=assets.find(a=>a.id===id);
-   if(!target || id===stored.cash || selected.attributes.currency_code!==target.attributes.currency_code) throw new Error('Savings accounts must be separate from cash and use the card currency.');
+   const target=reserveOptions.find(a=>a.id===id);
+   if(!target || id===stored.cash || selected.attributes.currency_code!==target.attributes.currency_code) throw new Error('Linked accounts must be separate from cash, be assets or amounts owed to you, and use the card currency.');
    if(liabilities.some(a=>a.id!==selected.id && cardAccounts(a.attributes.notes).ids.includes(id))) throw new Error('A savings account is already assigned to another card; its whole balance cannot be reconciled twice.');
   }
   const fresh=await api(stored,`/accounts/${linkingCard}`);
@@ -154,7 +155,7 @@
   {#if report.missing.length}<p class="error">Missing or invalid balances/accounts: {report.missing.join(', ')}. Difference is not reliable.</p>{/if}
   <details><summary>Linked savings breakdown</summary>
    {#each report.accounts as account (account.id)}
-   <p>{account.attributes.name}: {currency(Number(account.attributes.current_balance),account.attributes.currency_code)}</p>
+   <p>{account.attributes.name}: {currency(reserveBalance(account),account.attributes.currency_code)}</p>
    {/each}
   </details>
  </article>
@@ -188,13 +189,13 @@
  <hr/><h3>Primary cash account</h3>
  <label>Primary cash account<select bind:value={config.cash}><option value="">Choose an asset account</option>{#each assets as a}<option value={a.id}>{a.attributes.name}</option>{/each}</select></label>
  <button disabled={busy} onclick={preferences}>Save preferences</button>
- <hr/><h3>Credit card savings</h3><p class="hint">Link an existing liability to the asset account holding its repayment money.</p>
- {#each liabilities.filter(a=>cardLink(a)) as a}<p class="mapping">{a.attributes.name} → {cardAccounts(a.attributes.notes).ids.map(id=>assets.find(b=>b.id===id)?.attributes.name || 'Missing account').join(', ')} (primary: {assets.find(b=>b.id===cardLink(a))?.attributes.name || 'Missing account'})</p>{/each}
+ <hr/><h3>Credit card savings</h3><p class="hint">Link savings assets and liabilities marked “I am owed this amount” for reconciliation. Keep a savings asset as primary for automatic purchase reserve transfers.</p>
+ {#each liabilities.filter(a=>cardLink(a)) as a}<p class="mapping">{a.attributes.name} → {cardAccounts(a.attributes.notes).ids.map(id=>reserveOptions.find(b=>b.id===id)?.attributes.name || 'Missing account').join(', ')} (primary: {assets.find(b=>b.id===cardLink(a))?.attributes.name || 'Missing account'})</p>{/each}
  <label>Credit liability<select value={linkingCard} onchange={(e)=>selectCardLink(e.currentTarget.value)}><option value="">Choose liability</option>{#each liabilities as a}<option value={a.id}>{a.attributes.name}</option>{/each}</select></label>
  {#if linkingCard}
- <fieldset><legend>Linked savings accounts (count toward reconciliation)</legend>
- {#each assets.filter(a=>a.id!==config.cash && a.attributes.currency_code===liabilities.find(c=>c.id===linkingCard)?.attributes.currency_code) as a}
- <label><input type="checkbox" checked={selectedReserves.includes(a.id)} onchange={(e)=>toggleReserve(a.id,e.currentTarget.checked)}/>{a.attributes.name}</label>
+ <fieldset><legend>Linked accounts (count toward reconciliation)</legend>
+ {#each reserveOptions.filter(a=>a.id!==config.cash && a.attributes.currency_code===liabilities.find(c=>c.id===linkingCard)?.attributes.currency_code) as a}
+ <label><input type="checkbox" checked={selectedReserves.includes(a.id)} onchange={(e)=>toggleReserve(a.id,e.currentTarget.checked)}/>{a.attributes.name}{a.attributes.type!=='asset'?' · Owed to me':''}</label>
  {/each}
  </fieldset>
  <label>Primary savings account (receives new purchase reserves)<select bind:value={reserve}><option value="">Choose primary</option>{#each assets.filter(a=>selectedReserves.includes(a.id)) as a}<option value={a.id}>{a.attributes.name}</option>{/each}</select></label>
