@@ -142,3 +142,7 @@ For local desktop testing, run `npm run build` then `npm run preview` and open h
 Settings → Appearance offers System/Light/Dark modes and six Material 3-inspired accent palettes, persisted per browser using localStorage. Standalone PWAs cannot read Android wallpaper-derived colors, so accent selection is manual. The status-bar theme meta color follows the chosen mode where the browser supports it.
 
 Transfers stores the last successful Firefly response in IndexedDB, scoped to the instance URL and a SHA-256 hash of its PAT. Cached transfers appear immediately while an online refresh runs; an offline copy is for viewing only and may be outdated. A successful completion removes its entry from the local cache. Refresh still reads Firefly transfer history because the companion metadata cannot be filtered server-side, but pages are now fetched with up to four in flight.
+
+## Cyan UI refresh
+
+The default accent is the Firefly Assist brand color `#00A3CE`. The interface now uses responsive tonal surfaces, high-contrast text on cyan controls, rounded navigation, elevated activity panels, and compact mobile forms. Existing browser appearance preferences continue to work; users who selected another accent keep their choice.
