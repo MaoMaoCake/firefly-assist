@@ -111,6 +111,12 @@ input::placeholder { color:var(--md-on-surface-variant); opacity:.75; }
 input:hover,select:hover { border-color:var(--md-outline); }
 input:focus,select:focus { border-color:var(--md-primary); outline:none; box-shadow:0 0 0 3px color-mix(in srgb,var(--md-primary) 18%,transparent); }
 .amount { font-size:36px; font-weight:680; letter-spacing:-1.1px; font-variant-numeric:tabular-nums; }
+.quick-withdrawals { margin:18px 0 22px; padding:17px; border:1px solid var(--md-outline-variant); border-radius:18px; background:var(--md-surface-container); }
+.quick-withdrawals-heading h3 { margin:0; font-size:14px; }
+.quick-withdrawals-heading .hint { margin:5px 0 13px; }
+.quick-withdrawal-buttons { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; }
+.quick-withdrawal-buttons button { background:var(--md-secondary-container); color:var(--md-on-secondary-container); border-color:transparent; font-size:15px; font-weight:750; font-variant-numeric:tabular-nums; }
+.quick-withdrawal-buttons button:hover:not(:disabled) { border-color:var(--md-primary); }
 .hint { color:var(--md-on-surface-variant); font-size:12px; line-height:1.75; }
 .primary { display:flex; justify-content:space-between; align-items:center; width:100%; margin-top:26px; padding:15px 20px; background:var(--md-primary); border:1px solid var(--md-primary); color:var(--md-on-primary); border-radius:16px; font-size:14px; box-shadow:0 8px 22px color-mix(in srgb,var(--md-primary) 22%,transparent); }
 .primary:hover:not(:disabled) { background:var(--md-primary-hover); border-color:var(--md-primary-hover); color:var(--md-on-primary); box-shadow:var(--shadow-raised); }
