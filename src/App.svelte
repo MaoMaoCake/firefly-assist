@@ -107,7 +107,10 @@
   await api(stored,`/accounts/${linkingCard}`,'PUT',{notes:linkedAccountsNotes(fresh.data.attributes.notes || '',reserve,selectedReserves)});
   all=await accounts(stored); await set('accounts',all);message='Card savings accounts saved in Firefly.';
  });}
- async function record(){if(recording)return; recording=true; try{const stored=await get<Config>('config'); if(!stored) throw new Error('Configure Firefly first.'); if(tab==='credit'&&!card) throw new Error('Choose a credit card.'); const op=tab==='reimburse' ? createReimbursement(stored,all,name,amount) : create(stored,all,name,amount,tab==='credit'?card:''); await save(op); operations=await queue(); name='';amount='';message='Saved on this device.'; if(navigator.onLine) await synchronize();}catch(e){message=String(e);}finally{recording=false;} }
+ async function record(quickAmount?: number){if(recording||busy)return; recording=true; try{const stored=await get<Config>('config'); if(!stored) throw new Error('Configure Firefly first.'); if(quickAmount===undefined && tab==='credit'&&!card) throw new Error('Choose a credit card.'); const op=quickAmount!==undefined
+  ? create(stored,all,'Cash withdrawal',String(quickAmount))
+  : tab==='reimburse' ? createReimbursement(stored,all,name,amount) : create(stored,all,name,amount,tab==='credit'?card:'');
+  await save(op); operations=await queue(); if(quickAmount===undefined){name='';amount='';} message='Saved on this device.'; if(navigator.onLine) await synchronize();}catch(e){message=String(e);}finally{recording=false;} }
 </script>
 
 <svelte:head><meta name="description" content="A simple offline companion for Firefly III"/></svelte:head>
@@ -121,6 +124,16 @@
  <div hidden={tab!=='settings'}><InstallApp/><hr/></div>
  {#if tab==='cash' || tab==='credit' || tab==='reimburse'}
  <div class="panel-heading"><div><p class="eyebrow">NEW TRANSACTION</p><h2>{tab==='cash'?'Cash purchase':tab==='credit'?'Credit purchase':'Reimbursement'}</h2></div><span class="symbol">{tab==='credit'?'⇄':tab==='reimburse'?'↙':'↗'}</span></div>
+ {#if tab==='cash'}
+ <section class="quick-withdrawals" aria-label="Quick cash withdrawals">
+  <div class="quick-withdrawals-heading"><h3>Quick withdrawal</h3><p class="hint">One tap records a cash withdrawal from your primary cash account.</p></div>
+  <div class="quick-withdrawal-buttons">
+   {#each [60, 100, 500] as value}
+    <button type="button" disabled={busy||recording} onclick={()=>void record(value)} aria-label={`Record ฿${value} cash withdrawal`}>฿{value}</button>
+   {/each}
+  </div>
+ </section>
+ {/if}
  <form onsubmit={(e)=>{e.preventDefault();void record();}}>
  {#if tab==='credit'}<label>Credit card<select bind:value={card} required><option value="">Choose a linked card</option>{#each liabilities.filter(a=>cardLink(a)) as a}<option value={a.id}>{a.attributes.name}</option>{/each}</select></label>{/if}
  <label>Transaction name<input bind:value={name} placeholder={tab==='reimburse' ? 'e.g. Dinner paid back by Alex' : 'e.g. Groceries'} required maxlength="255"/></label>
